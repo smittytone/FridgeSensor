@@ -17,6 +17,7 @@ const OPEN_LIGHT_LEVEL = 30000;
 const DOOR_CHECK_TIME = 0.25;
 const READING_TIME = 300;
 const DOOR_OPEN_LIMIT = 20;
+const MAX_READINGS_COUNT = 200;
 
 // GLOBALS
 
@@ -130,7 +131,7 @@ function disconnect() {
     if (openTime != 0) data.openduration <- (data.timestamp - openTime);
     openTime = 0;
 
-    agent.send("fridge.data.upload", data);
+    local sendResult = agent.send("fridge.data.upload", data);
 
     // Now disconnect
     connectedFlag = false;
@@ -156,10 +157,10 @@ function processData() {
         if (openTime != 0) data.connecttime <- (data.timestamp - openTime);
 
         // Transfer the data
-        agent.send("fridge.data.upload", data);
+        local sendErrorCode = agent.send("fridge.data.upload", data);
 
-        // Clear the data table
-        resetData();
+        // Clear the data table - but only if the the data was sent
+        if (sendErrorCode == 0) resetData();
 
         // Restart the thermal sensor loop
         thermalSensorLoop();
@@ -169,7 +170,7 @@ function processData() {
         if (openTime != 0) data.connecttime <- (data.timestamp - openTime);
 
         // Transfer the data
-        agent.send("fridge.data.upload", data);
+        local sendErrorCode = agent.send("fridge.data.upload", data);
     }
 }
 
@@ -195,6 +196,11 @@ function getData() {
         }
 
         data.data.append(dataPoint);
+
+        // Remove the oldest items above MAX_READINGS_COUNT
+        while (data.data.len() > MAX_READINGS_COUNT) {
+            data.data.remove(0);
+        }
     }.bindenv(this));
 }
 
@@ -211,7 +217,7 @@ function doorAlert() {
         local data = {};
         data.timestamp <- time();
         data.message <- format("[ALERT] Fridge door open for at least %i seconds", DOOR_OPEN_LIMIT * openCount);
-        agent.send("fridge.door.alert", data);
+        local sendErrorCode = agent.send("fridge.door.alert", data);
 
         // Reset the timer on the door alert
         openCount += 1;
@@ -236,7 +242,6 @@ resetData();
 sensorNodeHAL.SENSOR_I2C.configure(CLOCK_SPEED_400_KHZ);
 tempSensor = HTS221(sensorNodeHAL.SENSOR_I2C, sensorNodeHAL.TEMP_HUMID_I2C_ADDR);
 tempSensor.setMode(HTS221_MODE.ONE_SHOT);
-
 
 // Start the sensor loops
 imp.wakeup(0.1, function() {

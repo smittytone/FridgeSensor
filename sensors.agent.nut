@@ -74,6 +74,7 @@ device.on("fridge.data.upload", function(data) {
     if ("timestamp" in data) server.log ("Data posted by device at " + utilities.timestampToIso(data.timestamp));
     if ("openduration" in data) server.log (format("Door closed after %i seconds", data.openduration));
     if ("connecttime" in data) server.log (format("Connected to server in %i seconds", data.connecttime));
+    if ("battery" in data) server.log (format("Battery voltage is %iV", data.battery));
     if ("lightlevel" in data) {
         local pc = (data.lightlevel.tofloat() / 65535.0) * 100.0;
         server.log ("Light level with door open: " + data.lightlevel + format(" (%.1f%%)", pc));

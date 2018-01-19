@@ -1,10 +1,42 @@
 // IMPORTS
-
 // Temperature Humidity sensor Library
 #require "HTS221.device.lib.nut:2.0.1"
 
-// EARLY-FIRE CODE
+// Battery class
+class Battery {
+    // Use this value to determine the voltage
+    static MAX_PIN_VAL = 65535.0;
+    // The when voltage drops below this threshold
+    // it will have trouble connecting to WiFi, so
+    // logs will no longer appear
+    static DEFAULT_THRESHOLD = 2.1;
 
+    // Class variables
+    _pin = null;
+    _threshold = null;
+
+    // Pass in an analog pin that is connected directly
+    // to the battery, the pin will be configured by the
+    // constructor
+    constructor(pin, threshold = null) {
+        _pin = pin;
+        _pin.configure(ANALOG_IN);
+        _threshold = (threshold == null) ? DEFAULT_THRESHOLD : threshold;
+    }
+
+    // Returns battery voltage
+    function getVoltage() {
+        return _pin.read() * hardware.voltage() / MAX_PIN_VAL
+    }
+
+    // Returns a boolean if battery voltage is getting
+    // too low to drive WiFi reliably
+    function isLow() {
+        return (getVoltage() <= _threshold);
+    }
+}
+
+// EARLY-FIRE CODE
 // Drop into low-power WiFi mode
 imp.setpowersave(true);
 
@@ -12,15 +44,13 @@ imp.setpowersave(true);
 server.setsendtimeoutpolicy(RETURN_ON_ERROR, WAIT_FOR_ACK, 10);
 
 // CONSTANTS
-
 const OPEN_LIGHT_LEVEL = 30000;
 const DOOR_CHECK_TIME = 0.25;
-const READING_TIME = 300;
+const READING_TIME = 600;
 const DOOR_OPEN_LIMIT = 20;
 const MAX_READINGS_COUNT = 200;
 
 // GLOBALS
-
 local thermalLoopTimer = null;
 local data = null;
 local tempSensor = null;
@@ -29,6 +59,7 @@ local connectingFlag = false;
 local getDataCount = 0;
 local openTime = 0;
 local openCount = 0;
+local battery = null;
 
 // Sensor Node HAL
 sensorNodeHAL <- {
@@ -50,6 +81,7 @@ sensorNodeHAL <- {
     "THERMISTER_PIN" : hardware.pinJ,
     "FTDI_UART" : hardware.uartQRPW,
     "PWR_3v3_EN" : hardware.pinY
+    "BATTERY": hardware.pinH
 }
 
 // LOOP MANAGEMENT FUNCTIONS
@@ -153,6 +185,8 @@ function processData() {
         // ...and the registered light level...
         data.lightlevel <- hardware.lightlevel();
 
+        data.battery <- battery.getVoltage();
+
         // ...and the length of time to connect
         if (openTime != 0) data.connecttime <- (data.timestamp - openTime);
 
@@ -242,6 +276,8 @@ resetData();
 sensorNodeHAL.SENSOR_I2C.configure(CLOCK_SPEED_400_KHZ);
 tempSensor = HTS221(sensorNodeHAL.SENSOR_I2C, sensorNodeHAL.TEMP_HUMID_I2C_ADDR);
 tempSensor.setMode(HTS221_MODE.ONE_SHOT);
+
+battery = Battery(sensorNodeHAL.BATTERY);
 
 // Start the sensor loops
 imp.wakeup(0.1, function() {

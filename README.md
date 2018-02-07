@@ -1,4 +1,4 @@
-# FridgeSensor #
+# FridgeSensor 1.0 #
 
 impAcceleterator Battery Powered Sensor Node-based fridge monitor.
 
